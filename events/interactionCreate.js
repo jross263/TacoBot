@@ -1,3 +1,5 @@
+const log = require("../logging")
+
 module.exports = {
 	name: 'interactionCreate',
 	async execute(interaction) {
@@ -7,6 +9,8 @@ module.exports = {
 
     if (!command) return;
 
+    log(interaction);
+    
     try {
       await command.execute(interaction);
     } catch (error) {
