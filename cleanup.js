@@ -18,6 +18,11 @@ module.exports = function Cleanup(callback) {
     process.exit(2);
   });
 
+   // catch ctrl+c event and exit nor1mally
+   process.on('SITERM', function () {
+    process.exit(2);
+  });
+
   //catch uncaught exceptions, trace, then exit normally
   process.on('uncaughtException', function(e) {
     console.log('Uncaught Exception...');
