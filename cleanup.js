@@ -14,12 +14,11 @@ module.exports = function Cleanup(callback) {
 
   // catch ctrl+c event and exit normally
   process.on('SIGINT', function () {
-    console.log('Ctrl-C...');
     process.exit(2);
   });
 
    // catch ctrl+c event and exit nor1mally
-   process.on('SITERM', function () {
+   process.on('SIGTERM', function () {
     process.exit(2);
   });
 
