@@ -25,8 +25,7 @@ module.exports = {
 
 			await interaction.channel.bulkDelete(messages)
 			
-			// await interaction.channel.bulkDelete(msgs)
-			await interaction.editReply({ content: `Deleted ${0} messages`, ephemeral: true });
+			await interaction.editReply({ content: `Deleted ${messages.size} messages`, ephemeral: true });
 		}catch(e){
 			await interaction.editReply({ content: `Error completing command, please try again.`, ephemeral: true });
 		}
