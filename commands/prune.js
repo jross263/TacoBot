@@ -3,7 +3,7 @@ const { SlashCommandBuilder } = require('@discordjs/builders');
 module.exports = {
 	data: new SlashCommandBuilder()
 		.setName('prune')
-		.setDescription('Prunes messages from the desired channel.')
+		.setDescription('Prunes messages from the desired channel. Can go back a max of 100 messages.')
 			.addIntegerOption(option =>
 				option.setName('amount')
 				.setDescription('The amount of messages to delete')
