@@ -43,4 +43,6 @@ func main() {
 	if err != nil {
 		log.Fatal("An error occurred while closing the session: ", err)
 	}
+
+	log.Print("TacoBot stopped!")
 }
