@@ -93,9 +93,11 @@ func loadConfig() (config, error) {
 
 func registerCommandHandlers(s *discordgo.Session) {
 	s.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+		slog.Info("Recieved command", "Name", i.ApplicationCommandData().Name)
 		switch i.Type {
 		case discordgo.InteractionApplicationCommand:
 			if cmd, ok := commands.Get(i.ApplicationCommandData().Name); ok {
+				slog.Info("Executing command", "Name", cmd.Definition().Name)
 				err := cmd.Handler(s, i)
 				if err != nil {
 					slog.Error("Error executing command handler", "Name", i.ApplicationCommandData().Name)
