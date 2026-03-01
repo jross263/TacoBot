@@ -7,7 +7,8 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
-	"tacobot/commands"
+	"tacobot/interactions"
+	_ "tacobot/interactions/teams"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/joho/godotenv"
@@ -41,15 +42,15 @@ func run() error {
 
 	slog.Info("Attempting to start bot session...")
 
+	registerInteractionHandlers(session)
+	registeredCommands := registerCommands(session, config)
+
 	err = session.Open()
 	if err != nil {
 		return fmt.Errorf("opening session: %w", err)
 	}
 
 	slog.Info("TacoBot running!")
-
-	registerCommandHandlers(session)
-	registeredCommands := registerCommands(session, config)
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
@@ -86,40 +87,39 @@ func loadConfig() (config, error) {
 	}
 
 	if len(missing) > 0 {
-		return config{}, fmt.Errorf("missing requiredx environment variables: %s", strings.Join(missing, ", "))
+		return config{}, fmt.Errorf("missing required environment variables: %s", strings.Join(missing, ", "))
 	}
 	return config{appId: appId, guildId: guildId, token: token}, nil
 }
 
-func registerCommandHandlers(s *discordgo.Session) {
+func registerInteractionHandlers(s *discordgo.Session) {
 	s.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
-		slog.Info("Recieved command", "Name", i.ApplicationCommandData().Name)
+		slog.Info("Received interaction", "Type", i.Type)
 		switch i.Type {
 		case discordgo.InteractionApplicationCommand:
-			if cmd, ok := commands.Get(i.ApplicationCommandData().Name); ok {
-				slog.Info("Executing command", "Name", cmd.Definition().Name)
-				err := cmd.Handler(s, i)
-				if err != nil {
-					slog.Error("Error executing command handler", "Name", i.ApplicationCommandData().Name)
-				}
-			}
+			routeInteractionType(i.ApplicationCommandData().Name, s, i)
 		case discordgo.InteractionMessageComponent:
-			if cmd, ok := commands.Get(i.MessageComponentData().CustomID); ok {
-				if cc, ok := cmd.(commands.ComponentCommand); ok {
-					err := cc.ComponentHandler(s, i)
-					if err != nil {
-						slog.Error("Error executing component handler", "CustomID", i.MessageComponentData().CustomID)
-					}
-				}
-			}
+			routeInteractionType(i.MessageComponentData().CustomID, s, i)
 		}
 	})
 }
 
-func registerCommands(s *discordgo.Session, config config) []*discordgo.ApplicationCommand {
-	registeredCommands := make([]*discordgo.ApplicationCommand, 0, len(commands.All()))
+func routeInteractionType(id string, s *discordgo.Session, i *discordgo.InteractionCreate) {
+	if h, ok := interactions.Get(id); ok {
+		slog.Info("Executing handler", "ID", h.ID())
+		err := h.Handle(s, i)
+		if err != nil {
+			slog.Error("Error executing handler", "ID", h.ID(), "err", err)
+		}
+	}
+}
 
-	for _, cmd := range commands.All() {
+func registerCommands(s *discordgo.Session, config config) []*discordgo.ApplicationCommand {
+	commands := interactions.AllCommands()
+
+	registeredCommands := make([]*discordgo.ApplicationCommand, 0, len(commands))
+
+	for _, cmd := range commands {
 		slog.Info("Attempting to add command", "Name", cmd.Definition().Name)
 		createdCmd, err := s.ApplicationCommandCreate(config.appId, config.guildId, cmd.Definition())
 		if err != nil {
@@ -137,7 +137,7 @@ func removeCommands(s *discordgo.Session, registeredCommands []*discordgo.Applic
 	cmds, err := s.ApplicationCommands(config.appId, config.guildId)
 
 	if err != nil {
-		slog.Warn("Error retrieving commands, defaulting to registered list")
+		slog.Warn("Error retrieving commands, defaulting to registered list", "err", err)
 		cmds = registeredCommands
 	}
 
@@ -145,7 +145,7 @@ func removeCommands(s *discordgo.Session, registeredCommands []*discordgo.Applic
 		slog.Info("Attempting to remove command", "Name", cmd.Name, "ID", cmd.ID)
 		err := s.ApplicationCommandDelete(config.appId, config.guildId, cmd.ID)
 		if err != nil {
-			slog.Error("Error trying to delete command", "Name", cmd.Name, "ID", cmd.ID)
+			slog.Error("Error trying to delete command", "Name", cmd.Name, "ID", cmd.ID, "err", err)
 			continue
 		}
 		slog.Info("Removed command", "Name", cmd.Name)
