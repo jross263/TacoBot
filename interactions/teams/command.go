@@ -8,16 +8,10 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-type command struct{}
-
 const userSelectMinimum int = 3
 const userSelectMaximum int = 25
 
-func (t command) ID() string {
-	return CommandTeams
-}
-
-func (c command) Handle(s *discordgo.Session, i *discordgo.InteractionCreate) error {
+func handleTeamCommand(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	defaultMembers := getDefaultMembers(s, i)
 	Add(i.Member.User.ID, TeamSession{Users: defaultMembers})
 	defaultSelectValues := getDefaultSelectValues(defaultMembers)
@@ -34,7 +28,7 @@ func (c command) Handle(s *discordgo.Session, i *discordgo.InteractionCreate) er
 							MenuType:      discordgo.UserSelectMenu,
 							MinValues:     util.Ptr(userSelectMinimum),
 							MaxValues:     userSelectMaximum,
-							CustomID:      InteractionHandleUserSelect,
+							CustomID:      HandleUsersSelect,
 							DefaultValues: defaultSelectValues,
 						},
 					},
@@ -43,7 +37,7 @@ func (c command) Handle(s *discordgo.Session, i *discordgo.InteractionCreate) er
 					Components: []discordgo.MessageComponent{
 						discordgo.Button{
 							Label:    "Go!",
-							CustomID: InteractionHandleUserButton,
+							CustomID: HandleUsersButton,
 							Style:    discordgo.SuccessButton,
 						},
 					},
@@ -92,13 +86,18 @@ func getDefaultSelectValues(users []string) []discordgo.SelectMenuDefaultValue {
 	return members
 }
 
-func (c command) Definition() *discordgo.ApplicationCommand {
-	return &discordgo.ApplicationCommand{
-		Name:        CommandTeams,
-		Description: "Test Command",
-	}
-}
-
 func init() {
-	interactions.Add(command{})
+	interactions.Add(interactions.Command{
+		Definition: &discordgo.ApplicationCommand{
+			Name:        TeamsCommand,
+			Description: "Test Command",
+		},
+		Handle: handleTeamCommand,
+		Interactions: []interactions.Handler{
+			{ID: HandleUsersSelect, Handle: handleUsersSelect},
+			{ID: HandleUsersButton, Handle: handleUsersButton},
+			{ID: HandleTeamSelect, Handle: handleTeamSelect},
+			{ID: HandleTeamButton, Handle: handleTeamButton},
+		},
+	})
 }

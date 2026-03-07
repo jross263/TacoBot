@@ -6,37 +6,40 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-type Handler interface {
-	ID() string
-	Handle(s *discordgo.Session, i *discordgo.InteractionCreate) error
+type HandleFunc func(*discordgo.Session, *discordgo.InteractionCreate) error
+
+type Handler struct {
+	ID     string
+	Handle HandleFunc
 }
 
-type ApplicationCommand interface {
-	Handler
-	Definition() *discordgo.ApplicationCommand
+type Command struct {
+	Definition   *discordgo.ApplicationCommand
+	Handle       HandleFunc
+	Interactions []Handler
 }
 
-var handlers = make(map[string]Handler)
+var handlers = make(map[string]HandleFunc)
+var commands []*discordgo.ApplicationCommand
 
-func Add(h Handler) {
-	_, ok := handlers[h.ID()]
+func Add(cmd Command) {
+	id := cmd.Definition.Name
+	_, ok := handlers[id]
 	if ok {
-		panic(fmt.Sprintf("handler with ID %q is already registered", h.ID()))
+		panic(fmt.Sprintf("handler with ID %q is already registered", id))
 	}
-	handlers[h.ID()] = h
+	commands = append(commands, cmd.Definition)
+	handlers[id] = cmd.Handle
+	for _, i := range cmd.Interactions {
+		handlers[i.ID] = i.Handle
+	}
 }
 
-func Get(id string) (Handler, bool) {
+func Get(id string) (HandleFunc, bool) {
 	h, ok := handlers[id]
 	return h, ok
 }
 
-func AllCommands() []ApplicationCommand {
-	var cmds []ApplicationCommand
-	for _, h := range handlers {
-		if cmd, ok := h.(ApplicationCommand); ok {
-			cmds = append(cmds, cmd)
-		}
-	}
-	return cmds
+func AllCommands() []*discordgo.ApplicationCommand {
+	return commands
 }

@@ -106,10 +106,10 @@ func registerInteractionHandlers(s *discordgo.Session) {
 
 func routeInteractionType(id string, s *discordgo.Session, i *discordgo.InteractionCreate) {
 	if h, ok := interactions.Get(id); ok {
-		slog.Info("Executing handler", "ID", h.ID())
-		err := h.Handle(s, i)
+		slog.Info("Executing handler", "ID", id)
+		err := h(s, i)
 		if err != nil {
-			slog.Error("Error executing handler", "ID", h.ID(), "err", err)
+			slog.Error("Error executing handler", "ID", id, "err", err)
 		}
 	}
 }
@@ -120,13 +120,13 @@ func registerCommands(s *discordgo.Session, config config) []*discordgo.Applicat
 	registeredCommands := make([]*discordgo.ApplicationCommand, 0, len(commands))
 
 	for _, cmd := range commands {
-		slog.Info("Attempting to add command", "Name", cmd.Definition().Name)
-		createdCmd, err := s.ApplicationCommandCreate(config.appId, config.guildId, cmd.Definition())
+		slog.Info("Attempting to add command", "Name", cmd.Name)
+		createdCmd, err := s.ApplicationCommandCreate(config.appId, config.guildId, cmd)
 		if err != nil {
-			slog.Error("Error adding command", "Name", cmd.Definition().Name, "err", err)
+			slog.Error("Error adding command", "Name", cmd.Name, "err", err)
 			continue
 		}
-		slog.Info("Added command", "Name", cmd.Definition().Name)
+		slog.Info("Added command", "Name", cmd.Name)
 		registeredCommands = append(registeredCommands, createdCmd)
 	}
 
