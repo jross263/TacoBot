@@ -3,7 +3,6 @@ package teams
 import (
 	"errors"
 	"fmt"
-	"log/slog"
 	"strconv"
 	"strings"
 	"tacobot/interactions"
@@ -12,10 +11,16 @@ import (
 	"github.com/google/uuid"
 )
 
-var ErrSessionNotFound = errors.New("session not found, please run /teams again")
+var ErrSessionNotFound = errors.New("session not found")
+var ErrNumberOfTeamsNotFound = errors.New("numTeams not found")
 
 func (h *TeamsHandlers) handleUsersSelect(ctx interactions.InteractionContext, params map[string]string) error {
-	h.store.Set(ctx.Event.Member.User.ID, ctx.Event.MessageComponentData().Values)
+	userId, err := interactions.GetUserID(ctx)
+	if err != nil {
+		return interactions.RespondWithError(ctx, err, genericError)
+	}
+
+	h.store.Set(userId, ctx.Event.MessageComponentData().Values)
 
 	return ctx.Session.InteractionRespond(ctx.Event.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseDeferredMessageUpdate,
@@ -23,11 +28,16 @@ func (h *TeamsHandlers) handleUsersSelect(ctx interactions.InteractionContext, p
 }
 
 func (h *TeamsHandlers) handleUsersButton(ctx interactions.InteractionContext, params map[string]string) error {
-	users, ok := h.store.Get(ctx.Event.Member.User.ID)
-	if !ok {
-		return respondWithError(ctx, ErrSessionNotFound)
+	userId, err := interactions.GetUserID(ctx)
+	if err != nil {
+		return interactions.RespondWithError(ctx, err, genericError)
 	}
-	h.store.Delete(ctx.Event.Member.User.ID)
+
+	users, ok := h.store.Get(userId)
+	if !ok {
+		return interactions.RespondWithError(ctx, ErrSessionNotFound, genericError)
+	}
+	h.store.Delete(userId)
 
 	session := uuid.New().String()
 	h.store.Set(session, users)
@@ -44,7 +54,7 @@ func (h *TeamsHandlers) handleUsersButton(ctx interactions.InteractionContext, p
 
 	customID, err := interactions.Encode(HandleTeamSelect, interactions.Param{Key: "sessionID", Value: session})
 	if err != nil {
-		return respondWithError(ctx, err)
+		return interactions.RespondWithError(ctx, err, genericError)
 	}
 
 	return ctx.Session.InteractionRespond(ctx.Event.Interaction, &discordgo.InteractionResponse{
@@ -70,21 +80,26 @@ func (h *TeamsHandlers) handleUsersButton(ctx interactions.InteractionContext, p
 func (h *TeamsHandlers) handleTeamSelect(ctx interactions.InteractionContext, params map[string]string) error {
 	sessionID, ok := params["sessionID"]
 	if !ok {
-		return respondWithError(ctx, ErrSessionNotFound)
+		return interactions.RespondWithError(ctx, ErrSessionNotFound, genericError)
 	}
 
-	return h.respondWithTeams(ctx, discordgo.InteractionResponseChannelMessageWithSource, sessionID, ctx.Event.MessageComponentData().Values[0])
+	values := ctx.Event.MessageComponentData().Values
+	if len(values) != 1 {
+		return errors.New("no values in selection")
+	}
+
+	return h.respondWithTeams(ctx, discordgo.InteractionResponseChannelMessageWithSource, sessionID, values[0])
 }
 
 func (h *TeamsHandlers) handleTeamButton(ctx interactions.InteractionContext, params map[string]string) error {
 	sessionID, ok := params["sessionID"]
 	if !ok {
-		return respondWithError(ctx, ErrSessionNotFound)
+		return interactions.RespondWithError(ctx, ErrSessionNotFound, genericError)
 	}
 
 	numberOfTeams, ok := params["numTeams"]
 	if !ok {
-		return respondWithError(ctx, ErrSessionNotFound)
+		return interactions.RespondWithError(ctx, ErrNumberOfTeamsNotFound, genericError)
 	}
 
 	return h.respondWithTeams(ctx, discordgo.InteractionResponseUpdateMessage, sessionID, numberOfTeams)
@@ -93,17 +108,17 @@ func (h *TeamsHandlers) handleTeamButton(ctx interactions.InteractionContext, pa
 func (h *TeamsHandlers) respondWithTeams(ctx interactions.InteractionContext, t discordgo.InteractionResponseType, sessionID string, numberOfTeams string) error {
 	users, ok := h.store.Get(sessionID)
 	if !ok {
-		return respondWithError(ctx, ErrSessionNotFound)
+		return interactions.RespondWithError(ctx, ErrSessionNotFound, genericError)
 	}
 
 	n, err := strconv.Atoi(numberOfTeams)
 	if err != nil {
-		return respondWithError(ctx, err)
+		return interactions.RespondWithError(ctx, err, genericError)
 	}
 
 	teams, err := RandomizeTeams(n, users)
 	if err != nil {
-		return respondWithError(ctx, err)
+		return interactions.RespondWithError(ctx, err, genericError)
 	}
 
 	var sb strings.Builder
@@ -113,7 +128,7 @@ func (h *TeamsHandlers) respondWithTeams(ctx interactions.InteractionContext, t 
 
 	customID, err := interactions.Encode(HandleTeamButton, interactions.Param{Key: "sessionID", Value: sessionID}, interactions.Param{Key: "numTeams", Value: numberOfTeams})
 	if err != nil {
-		return respondWithError(ctx, err)
+		return interactions.RespondWithError(ctx, err, genericError)
 	}
 
 	return ctx.Session.InteractionRespond(ctx.Event.Interaction, &discordgo.InteractionResponse{
@@ -132,20 +147,4 @@ func (h *TeamsHandlers) respondWithTeams(ctx interactions.InteractionContext, t 
 			},
 		},
 	})
-}
-
-func respondWithError(ctx interactions.InteractionContext, originalErr error) error {
-	respondErr := ctx.Session.InteractionRespond(ctx.Event.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseUpdateMessage,
-		Data: &discordgo.InteractionResponseData{
-			Content: "Error encountered, please run /teams again!",
-		},
-	})
-
-	if respondErr != nil {
-		slog.Error("failed to send error response", "err", respondErr)
-		return errors.Join(originalErr, respondErr)
-	}
-
-	return originalErr
 }

@@ -23,7 +23,12 @@ const userSelectMaximum int = 25
 
 func (h *TeamsHandlers) handleTeamCommand(ctx interactions.InteractionContext, params map[string]string) error {
 	defaultMembers := getDefaultMembers(ctx)
-	h.store.Set(ctx.Event.Member.User.ID, defaultMembers)
+	userId, err := interactions.GetUserID(ctx)
+	if err != nil {
+		return interactions.RespondWithError(ctx, err, genericError)
+	}
+
+	h.store.Set(userId, defaultMembers)
 	defaultSelectValues := getDefaultSelectValues(defaultMembers)
 
 	return ctx.Session.InteractionRespond(ctx.Event.Interaction, &discordgo.InteractionResponse{
@@ -60,15 +65,21 @@ func (h *TeamsHandlers) handleTeamCommand(ctx interactions.InteractionContext, p
 func getDefaultMembers(ctx interactions.InteractionContext) []string {
 	var members []string
 
-	vs, err := ctx.Session.StateVoiceState(ctx.Event.GuildID, ctx.Event.Member.User.ID)
+	userId, err := interactions.GetUserID(ctx)
 	if err != nil {
+		slog.Warn("Error getting user id, defaulting to no users", "err", err)
+		return members
+	}
+
+	vs, err := ctx.Session.StateVoiceState(ctx.Event.GuildID, userId)
+	if err != nil || vs == nil {
 		slog.Warn("Error getting voice state, defaulting to no users", "err", err)
 		return members
 	}
 
 	guild, err := ctx.Session.StateGuild(ctx.Event.GuildID)
-	if err != nil {
-		slog.Warn("Error getting voice state, defaulting to no users", "err", err)
+	if err != nil || guild == nil {
+		slog.Warn("Error getting guild, defaulting to no users", "err", err)
 		return members
 	}
 	for _, v := range guild.VoiceStates {

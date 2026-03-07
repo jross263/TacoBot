@@ -7,3 +7,7 @@ const (
 	HandleTeamSelect  = "teams_handle_team_select"
 	HandleTeamButton  = "teams_handle_team_shuffle"
 )
+
+const (
+	genericError = "Error encountered, please run /teams again!"
+)
