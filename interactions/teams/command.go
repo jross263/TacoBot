@@ -11,9 +11,9 @@ import (
 const userSelectMinimum int = 3
 const userSelectMaximum int = 25
 
-func handleTeamCommand(s *discordgo.Session, i *discordgo.InteractionCreate) error {
+func handleTeamCommand(s *discordgo.Session, i *discordgo.InteractionCreate, params map[string]string) error {
 	defaultMembers := getDefaultMembers(s, i)
-	cache.Set(i.Member.User.ID, TeamSession{Users: defaultMembers})
+	cache.Set(i.Member.User.ID, defaultMembers)
 	defaultSelectValues := getDefaultSelectValues(defaultMembers)
 
 	return s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{

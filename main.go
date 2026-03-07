@@ -105,9 +105,15 @@ func registerInteractionHandlers(s *discordgo.Session) {
 }
 
 func routeInteractionType(id string, s *discordgo.Session, i *discordgo.InteractionCreate) {
+	id, params, err := interactions.Decode(id)
+	if err != nil {
+		slog.Error("Error executing handler", "ID", id, "err", err)
+		return
+	}
+
 	if h, ok := interactions.Get(id); ok {
 		slog.Info("Executing handler", "ID", id)
-		err := h(s, i)
+		err := h(s, i, params)
 		if err != nil {
 			slog.Error("Error executing handler", "ID", id, "err", err)
 		}

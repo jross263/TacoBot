@@ -52,6 +52,12 @@ func (c *Cache[K, V]) Update(k K, fn func(V) V) error {
 	return nil
 }
 
+func (c *Cache[K, V]) Delete(k K) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.data, k)
+}
+
 // NOTE: These are shallow copies
 func (c *Cache[K, V]) All() map[K]V {
 	c.mu.RLock()

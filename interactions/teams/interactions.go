@@ -6,27 +6,33 @@ import (
 	"log/slog"
 	"strconv"
 	"strings"
+	"tacobot/interactions"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/google/uuid"
 )
 
 var ErrSessionNotFound = errors.New("session not found, please run /teams again")
 
-func handleUsersSelect(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	cache.Set(i.Member.User.ID, TeamSession{Users: i.MessageComponentData().Values})
+func handleUsersSelect(s *discordgo.Session, i *discordgo.InteractionCreate, params map[string]string) error {
+	cache.Set(i.Member.User.ID, i.MessageComponentData().Values)
 
 	return s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseDeferredMessageUpdate,
 	})
 }
 
-func handleUsersButton(s *discordgo.Session, i *discordgo.InteractionCreate) error {
+func handleUsersButton(s *discordgo.Session, i *discordgo.InteractionCreate, params map[string]string) error {
 	users, ok := cache.Get(i.Member.User.ID)
 	if !ok {
 		return respondWithError(s, i, ErrSessionNotFound)
 	}
+	cache.Delete(i.Member.User.ID)
 
-	numberOfTeams := GetNumberOfTeams(len(users.Users))
+	session := uuid.New().String()
+	cache.Set(session, users)
+
+	numberOfTeams := GetNumberOfTeams(len(users))
 
 	var selectOptions []discordgo.SelectMenuOption
 	for _, i := range numberOfTeams {
@@ -34,6 +40,11 @@ func handleUsersButton(s *discordgo.Session, i *discordgo.InteractionCreate) err
 			Label: strconv.Itoa(i),
 			Value: strconv.Itoa(i),
 		})
+	}
+
+	customID, err := interactions.Encode(HandleTeamSelect, interactions.Param{Key: "sessionId", Value: session})
+	if err != nil {
+		return respondWithError(s, i, err)
 	}
 
 	return s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
@@ -47,7 +58,7 @@ func handleUsersButton(s *discordgo.Session, i *discordgo.InteractionCreate) err
 						discordgo.SelectMenu{
 							MenuType: discordgo.StringSelectMenu,
 							Options:  selectOptions,
-							CustomID: HandleTeamSelect,
+							CustomID: customID,
 						},
 					},
 				},
@@ -56,35 +67,41 @@ func handleUsersButton(s *discordgo.Session, i *discordgo.InteractionCreate) err
 	})
 }
 
-func handleTeamSelect(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	var numberOfTeams = i.MessageComponentData().Values[0]
+func handleTeamSelect(s *discordgo.Session, i *discordgo.InteractionCreate, params map[string]string) error {
+	sessionId, ok := params["sessionId"]
+	if !ok {
+		return respondWithError(s, i, ErrSessionNotFound)
+	}
+
+	return respondWithTeams(s, i, discordgo.InteractionResponseChannelMessageWithSource, sessionId, i.MessageComponentData().Values[0])
+}
+
+func handleTeamButton(s *discordgo.Session, i *discordgo.InteractionCreate, params map[string]string) error {
+	sessionId, ok := params["sessionId"]
+	if !ok {
+		return respondWithError(s, i, ErrSessionNotFound)
+	}
+
+	numberOfTeams, ok := params["numTeams"]
+	if !ok {
+		return respondWithError(s, i, ErrSessionNotFound)
+	}
+
+	return respondWithTeams(s, i, discordgo.InteractionResponseUpdateMessage, sessionId, numberOfTeams)
+}
+
+func respondWithTeams(s *discordgo.Session, i *discordgo.InteractionCreate, t discordgo.InteractionResponseType, sessionId string, numberOfTeams string) error {
+	users, ok := cache.Get(sessionId)
+	if !ok {
+		return respondWithError(s, i, ErrSessionNotFound)
+	}
+
 	n, err := strconv.Atoi(numberOfTeams)
 	if err != nil {
 		return respondWithError(s, i, err)
 	}
 
-	err = cache.Update(i.Member.User.ID, func(ts TeamSession) TeamSession {
-		ts.NumberOfTeams = n
-		return ts
-	})
-	if err != nil {
-		return respondWithError(s, i, err)
-	}
-
-	return respondWithTeams(s, i, discordgo.InteractionResponseChannelMessageWithSource)
-}
-
-func handleTeamButton(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	return respondWithTeams(s, i, discordgo.InteractionResponseUpdateMessage)
-}
-
-func respondWithTeams(s *discordgo.Session, i *discordgo.InteractionCreate, t discordgo.InteractionResponseType) error {
-	users, ok := cache.Get(i.Member.User.ID)
-	if !ok {
-		return respondWithError(s, i, ErrSessionNotFound)
-	}
-
-	teams, err := RandomizeTeams(users.NumberOfTeams, users.Users)
+	teams, err := RandomizeTeams(n, users)
 	if err != nil {
 		return respondWithError(s, i, err)
 	}
@@ -92,6 +109,11 @@ func respondWithTeams(s *discordgo.Session, i *discordgo.InteractionCreate, t di
 	var sb strings.Builder
 	for i, team := range teams {
 		sb.WriteString(fmt.Sprintf("Team %d: %s\n", i+1, strings.Join(team, ", ")))
+	}
+
+	customID, err := interactions.Encode(HandleTeamButton, interactions.Param{Key: "sessionId", Value: sessionId}, interactions.Param{Key: "numTeams", Value: numberOfTeams})
+	if err != nil {
+		return respondWithError(s, i, err)
 	}
 
 	return s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
@@ -103,7 +125,7 @@ func respondWithTeams(s *discordgo.Session, i *discordgo.InteractionCreate, t di
 					Components: []discordgo.MessageComponent{
 						discordgo.Button{
 							Label:    "Shuffle!",
-							CustomID: HandleTeamButton,
+							CustomID: customID,
 						},
 					},
 				},
