@@ -3,6 +3,7 @@ package teams
 import (
 	"errors"
 	"math/rand"
+	"slices"
 	"tacobot/util"
 )
 
@@ -33,17 +34,19 @@ func RandomizeTeams(numberOfTeams int, users []string) ([][]string, error) {
 
 	teams := make([][]string, numberOfTeams)
 
-	rand.Shuffle(len(users), func(i, j int) {
-		users[i], users[j] = users[j], users[i]
+	usersCopy := slices.Clone(users)
+
+	rand.Shuffle(len(usersCopy), func(i, j int) {
+		usersCopy[i], usersCopy[j] = usersCopy[j], usersCopy[i]
 	})
 
-	teamSize := len(users) / numberOfTeams
-	remainder := len(users) % numberOfTeams
+	teamSize := len(usersCopy) / numberOfTeams
+	remainder := len(usersCopy) % numberOfTeams
 
 	for i := 0; i < numberOfTeams; i++ {
 		start := i*teamSize + min(remainder, i)
 		end := start + teamSize + util.If(i < remainder, 1, 0)
-		teams[i] = users[start:end]
+		teams[i] = usersCopy[start:end]
 	}
 
 	return teams, nil
