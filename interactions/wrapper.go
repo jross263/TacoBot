@@ -24,23 +24,23 @@ func Encode(prefix string, params ...Param) (string, error) {
 
 	encodedParams := strings.Join(parts, "&")
 
-	encodedId := fmt.Sprintf("%s:%s", prefix, encodedParams)
-	if len(encodedId) > 100 {
+	encodedID := fmt.Sprintf("%s:%s", prefix, encodedParams)
+	if len(encodedID) > 100 {
 		return "", errors.New("character limit reached on custom id")
 	}
 
-	return encodedId, nil
+	return encodedID, nil
 }
 
-func Decode(customId string) (string, map[string]string, error) {
+func Decode(customID string) (string, map[string]string, error) {
 	params := make(map[string]string)
-	if !strings.Contains(customId, ":") {
-		return customId, params, nil
+	if !strings.Contains(customID, ":") {
+		return customID, params, nil
 	}
 
-	parts := strings.Split(customId, ":")
+	parts := strings.Split(customID, ":")
 	if len(parts) != 2 {
-		return "", params, fmt.Errorf("malformed custom id: %q", customId)
+		return "", params, fmt.Errorf("malformed custom id: %q", customID)
 	}
 
 	prefix := parts[0]
@@ -49,7 +49,7 @@ func Decode(customId string) (string, map[string]string, error) {
 	for _, kvp := range kvps {
 		kvpParts := strings.Split(kvp, "=")
 		if len(kvpParts) != 2 {
-			slog.Warn("malformed kvp", "kvp", kvp, "customId", prefix)
+			slog.Warn("malformed kvp", "kvp", kvp, "customID", prefix)
 			continue
 		}
 

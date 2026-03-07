@@ -7,8 +7,6 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-type HandleFunc func(*discordgo.Session, *discordgo.InteractionCreate, map[string]string) error
-
 type Handler struct {
 	ID     string
 	Handle HandleFunc

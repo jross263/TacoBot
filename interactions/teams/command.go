@@ -8,15 +8,25 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
+type SessionStore interface {
+	Get(key string) ([]string, bool)
+	Set(key string, value []string)
+	Delete(key string)
+}
+
+type TeamsHandlers struct {
+	store SessionStore
+}
+
 const userSelectMinimum int = 3
 const userSelectMaximum int = 25
 
-func handleTeamCommand(s *discordgo.Session, i *discordgo.InteractionCreate, params map[string]string) error {
-	defaultMembers := getDefaultMembers(s, i)
-	cache.Set(i.Member.User.ID, defaultMembers)
+func (h *TeamsHandlers) handleTeamCommand(ctx interactions.InteractionContext, params map[string]string) error {
+	defaultMembers := getDefaultMembers(ctx)
+	h.store.Set(ctx.Event.Member.User.ID, defaultMembers)
 	defaultSelectValues := getDefaultSelectValues(defaultMembers)
 
-	return s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+	return ctx.Session.InteractionRespond(ctx.Event.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
 			Content: "Pick your players",
@@ -47,16 +57,16 @@ func handleTeamCommand(s *discordgo.Session, i *discordgo.InteractionCreate, par
 	})
 }
 
-func getDefaultMembers(s *discordgo.Session, i *discordgo.InteractionCreate) []string {
+func getDefaultMembers(ctx interactions.InteractionContext) []string {
 	var members []string
 
-	vs, err := s.State.VoiceState(i.GuildID, i.Member.User.ID)
+	vs, err := ctx.Session.StateVoiceState(ctx.Event.GuildID, ctx.Event.Member.User.ID)
 	if err != nil {
 		slog.Warn("Error getting voice state, defaulting to no users", "err", err)
 		return members
 	}
 
-	guild, err := s.State.Guild(i.GuildID)
+	guild, err := ctx.Session.StateGuild(ctx.Event.GuildID)
 	if err != nil {
 		slog.Warn("Error getting voice state, defaulting to no users", "err", err)
 		return members
@@ -87,17 +97,19 @@ func getDefaultSelectValues(users []string) []discordgo.SelectMenuDefaultValue {
 }
 
 func init() {
+	handlers := &TeamsHandlers{store: util.NewCache[string, []string]("TeamCache")}
+
 	interactions.Add(interactions.Command{
 		Definition: &discordgo.ApplicationCommand{
 			Name:        TeamsCommand,
 			Description: "Test Command",
 		},
-		Handle: handleTeamCommand,
+		Handle: handlers.handleTeamCommand,
 		Interactions: []interactions.Handler{
-			{ID: HandleUsersSelect, Handle: handleUsersSelect},
-			{ID: HandleUsersButton, Handle: handleUsersButton},
-			{ID: HandleTeamSelect, Handle: handleTeamSelect},
-			{ID: HandleTeamButton, Handle: handleTeamButton},
+			{ID: HandleUsersSelect, Handle: handlers.handleUsersSelect},
+			{ID: HandleUsersButton, Handle: handlers.handleUsersButton},
+			{ID: HandleTeamSelect, Handle: handlers.handleTeamSelect},
+			{ID: HandleTeamButton, Handle: handlers.handleTeamButton},
 		},
 	})
 }

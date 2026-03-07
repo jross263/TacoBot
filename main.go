@@ -15,8 +15,8 @@ import (
 )
 
 type config struct {
-	appId   string
-	guildId string
+	appID   string
+	guildID string
 	token   string
 }
 
@@ -71,15 +71,15 @@ func run() error {
 }
 
 func loadConfig() (config, error) {
-	appId := os.Getenv("DISCORD_APP_ID")
-	guildId := os.Getenv("DISCORD_GUILD_ID")
+	appID := os.Getenv("DISCORD_APP_ID")
+	guildID := os.Getenv("DISCORD_GUILD_ID")
 	token := os.Getenv("DISCORD_TOKEN")
 
 	var missing []string
-	if strings.TrimSpace(appId) == "" {
+	if strings.TrimSpace(appID) == "" {
 		missing = append(missing, "DISCORD_APP_ID")
 	}
-	if strings.TrimSpace(guildId) == "" {
+	if strings.TrimSpace(guildID) == "" {
 		missing = append(missing, "DISCORD_GUILD_ID")
 	}
 	if strings.TrimSpace(token) == "" {
@@ -89,7 +89,7 @@ func loadConfig() (config, error) {
 	if len(missing) > 0 {
 		return config{}, fmt.Errorf("missing required environment variables: %s", strings.Join(missing, ", "))
 	}
-	return config{appId: appId, guildId: guildId, token: token}, nil
+	return config{appID: appID, guildID: guildID, token: token}, nil
 }
 
 func registerInteractionHandlers(s *discordgo.Session) {
@@ -113,7 +113,11 @@ func routeInteractionType(id string, s *discordgo.Session, i *discordgo.Interact
 
 	if h, ok := interactions.Get(id); ok {
 		slog.Info("Executing handler", "ID", id)
-		err := h(s, i, params)
+		ctx := interactions.InteractionContext{
+			Session: interactions.NewDiscordSession(s),
+			Event:   i,
+		}
+		err := h(ctx, params)
 		if err != nil {
 			slog.Error("Error executing handler", "ID", id, "err", err)
 		}
@@ -127,7 +131,7 @@ func registerCommands(s *discordgo.Session, config config) []*discordgo.Applicat
 
 	for _, cmd := range commands {
 		slog.Info("Attempting to add command", "Name", cmd.Name)
-		createdCmd, err := s.ApplicationCommandCreate(config.appId, config.guildId, cmd)
+		createdCmd, err := s.ApplicationCommandCreate(config.appID, config.guildID, cmd)
 		if err != nil {
 			slog.Error("Error adding command", "Name", cmd.Name, "err", err)
 			continue
@@ -140,7 +144,7 @@ func registerCommands(s *discordgo.Session, config config) []*discordgo.Applicat
 }
 
 func removeCommands(s *discordgo.Session, registeredCommands []*discordgo.ApplicationCommand, config config) {
-	cmds, err := s.ApplicationCommands(config.appId, config.guildId)
+	cmds, err := s.ApplicationCommands(config.appID, config.guildID)
 
 	if err != nil {
 		slog.Warn("Error retrieving commands, defaulting to registered list", "err", err)
@@ -149,7 +153,7 @@ func removeCommands(s *discordgo.Session, registeredCommands []*discordgo.Applic
 
 	for _, cmd := range cmds {
 		slog.Info("Attempting to remove command", "Name", cmd.Name, "ID", cmd.ID)
-		err := s.ApplicationCommandDelete(config.appId, config.guildId, cmd.ID)
+		err := s.ApplicationCommandDelete(config.appID, config.guildID, cmd.ID)
 		if err != nil {
 			slog.Error("Error trying to delete command", "Name", cmd.Name, "ID", cmd.ID, "err", err)
 			continue
