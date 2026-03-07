@@ -1,15 +1,19 @@
 package teams
 
 import (
+	"errors"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
 )
 
+var ErrSessionNotFound = errors.New("session not found, please run /teams again")
+
 func handleUsersSelect(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	Add(i.Member.User.ID, TeamSession{Users: i.MessageComponentData().Values})
+	cache.Set(i.Member.User.ID, TeamSession{Users: i.MessageComponentData().Values})
 
 	return s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseDeferredMessageUpdate,
@@ -17,15 +21,9 @@ func handleUsersSelect(s *discordgo.Session, i *discordgo.InteractionCreate) err
 }
 
 func handleUsersButton(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	users, ok := Get(i.Member.User.ID)
+	users, ok := cache.Get(i.Member.User.ID)
 	if !ok {
-		return s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseUpdateMessage,
-			Data: &discordgo.InteractionResponseData{
-				Content: "Error",
-				Flags:   discordgo.MessageFlagsEphemeral,
-			},
-		})
+		return respondWithError(s, i, ErrSessionNotFound)
 	}
 
 	numberOfTeams := GetNumberOfTeams(len(users.Users))
@@ -60,12 +58,36 @@ func handleUsersButton(s *discordgo.Session, i *discordgo.InteractionCreate) err
 
 func handleTeamSelect(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	var numberOfTeams = i.MessageComponentData().Values[0]
-	n, _ := strconv.Atoi(numberOfTeams)
+	n, err := strconv.Atoi(numberOfTeams)
+	if err != nil {
+		return respondWithError(s, i, err)
+	}
 
-	Update(i.Member.User.ID, n)
-	users, _ := Get(i.Member.User.ID)
+	err = cache.Update(i.Member.User.ID, func(ts TeamSession) TeamSession {
+		ts.NumberOfTeams = n
+		return ts
+	})
+	if err != nil {
+		return respondWithError(s, i, err)
+	}
 
-	teams, _ := RandomizeTeams(n, users.Users)
+	return respondWithTeams(s, i, discordgo.InteractionResponseChannelMessageWithSource)
+}
+
+func handleTeamButton(s *discordgo.Session, i *discordgo.InteractionCreate) error {
+	return respondWithTeams(s, i, discordgo.InteractionResponseUpdateMessage)
+}
+
+func respondWithTeams(s *discordgo.Session, i *discordgo.InteractionCreate, t discordgo.InteractionResponseType) error {
+	users, ok := cache.Get(i.Member.User.ID)
+	if !ok {
+		return respondWithError(s, i, ErrSessionNotFound)
+	}
+
+	teams, err := RandomizeTeams(users.NumberOfTeams, users.Users)
+	if err != nil {
+		return respondWithError(s, i, err)
+	}
 
 	var sb strings.Builder
 	for i, team := range teams {
@@ -73,7 +95,7 @@ func handleTeamSelect(s *discordgo.Session, i *discordgo.InteractionCreate) erro
 	}
 
 	return s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Type: t,
 		Data: &discordgo.InteractionResponseData{
 			Content: sb.String(),
 			Components: []discordgo.MessageComponent{
@@ -90,29 +112,18 @@ func handleTeamSelect(s *discordgo.Session, i *discordgo.InteractionCreate) erro
 	})
 }
 
-func handleTeamButton(s *discordgo.Session, i *discordgo.InteractionCreate) error {
-	users, _ := Get(i.Member.User.ID)
-	teams, _ := RandomizeTeams(users.NumberOfTeams, users.Users)
-
-	var sb strings.Builder
-	for i, team := range teams {
-		sb.WriteString(fmt.Sprintf("Team %d: %s\n", i+1, strings.Join(team, ", ")))
-	}
-
-	return s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+func respondWithError(s *discordgo.Session, i *discordgo.InteractionCreate, originalErr error) error {
+	respondErr := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseUpdateMessage,
 		Data: &discordgo.InteractionResponseData{
-			Content: sb.String(),
-			Components: []discordgo.MessageComponent{
-				discordgo.ActionsRow{
-					Components: []discordgo.MessageComponent{
-						discordgo.Button{
-							Label:    "Shuffle!",
-							CustomID: HandleTeamButton,
-						},
-					},
-				},
-			},
+			Content: "Error encountered, please run /teams again!",
 		},
 	})
+
+	if respondErr != nil {
+		slog.Error("failed to send error response", "err", respondErr)
+		return errors.Join(originalErr, respondErr)
+	}
+
+	return originalErr
 }

@@ -13,7 +13,7 @@ const userSelectMaximum int = 25
 
 func handleTeamCommand(s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	defaultMembers := getDefaultMembers(s, i)
-	Add(i.Member.User.ID, TeamSession{Users: defaultMembers})
+	cache.Set(i.Member.User.ID, TeamSession{Users: defaultMembers})
 	defaultSelectValues := getDefaultSelectValues(defaultMembers)
 
 	return s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{

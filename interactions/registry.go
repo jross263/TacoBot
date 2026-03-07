@@ -1,7 +1,8 @@
 package interactions
 
 import (
-	"fmt"
+	"slices"
+	"tacobot/util"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -19,27 +20,27 @@ type Command struct {
 	Interactions []Handler
 }
 
-var handlers = make(map[string]HandleFunc)
-var commands []*discordgo.ApplicationCommand
+type registry struct {
+	handlers *util.Cache[string, HandleFunc]
+	commands []*discordgo.ApplicationCommand
+}
+
+var reg = &registry{handlers: util.NewCache[string, HandleFunc]("handlers")}
 
 func Add(cmd Command) {
 	id := cmd.Definition.Name
-	_, ok := handlers[id]
-	if ok {
-		panic(fmt.Sprintf("handler with ID %q is already registered", id))
-	}
-	commands = append(commands, cmd.Definition)
-	handlers[id] = cmd.Handle
+
+	reg.handlers.AddOnce(id, cmd.Handle)
+	reg.commands = append(reg.commands, cmd.Definition)
 	for _, i := range cmd.Interactions {
-		handlers[i.ID] = i.Handle
+		reg.handlers.AddOnce(i.ID, i.Handle)
 	}
 }
 
 func Get(id string) (HandleFunc, bool) {
-	h, ok := handlers[id]
-	return h, ok
+	return reg.handlers.Get(id)
 }
 
 func AllCommands() []*discordgo.ApplicationCommand {
-	return commands
+	return slices.Clone(reg.commands)
 }
