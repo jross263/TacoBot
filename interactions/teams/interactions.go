@@ -128,8 +128,9 @@ func (h *TeamsHandlers) respondWithTeams(ctx interactions.InteractionContext, t 
 			if j > 0 {
 				sb.WriteString(", ")
 			}
-			sb.WriteString("@")
+			sb.WriteString("<@")
 			sb.WriteString(name)
+			sb.WriteString(">")
 		}
 		sb.WriteByte('\n')
 	}
