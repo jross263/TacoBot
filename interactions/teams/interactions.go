@@ -123,7 +123,15 @@ func (h *TeamsHandlers) respondWithTeams(ctx interactions.InteractionContext, t 
 
 	var sb strings.Builder
 	for i, team := range teams {
-		sb.WriteString(fmt.Sprintf("Team %d: %s\n", i+1, strings.Join(team, ", ")))
+		sb.WriteString(fmt.Sprintf("Team %d: ", i+1))
+		for j, name := range team {
+			if j > 0 {
+				sb.WriteString(", ")
+			}
+			sb.WriteString("@")
+			sb.WriteString(name)
+		}
+		sb.WriteByte('\n')
 	}
 
 	customID, err := interactions.Encode(HandleTeamButton, interactions.Param{Key: "sessionID", Value: sessionID}, interactions.Param{Key: "numTeams", Value: numberOfTeams})
